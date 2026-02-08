@@ -71,14 +71,8 @@ jobs:
           if (!(Test-Path $env:PLUGINVAL_EXE)) { throw "pluginval exe not found: $env:PLUGINVAL_EXE" }
           if (!(Test-Path $env:PACKAGED_VST3)) { throw "Packaged VST3 not found: $env:PACKAGED_VST3" }
 
-          $args = @(
-            "--validate-in-process"
-            "--strictness-level", "5"
-            "--repeat", "1"
-            "--skip-gui-tests"
-            "--output-dir", "build/pluginval-out"
-            "$env:PACKAGED_VST3"
-          )
+          $quotedPluginPath = '"' + $env:PACKAGED_VST3 + '"'
+          $args = "--validate-in-process --strictness-level 5 --repeat 1 --skip-gui-tests --output-dir ""build/pluginval-out"" --validate $quotedPluginPath"
 
           $pluginvalProcess = Start-Process -FilePath "$env:PLUGINVAL_EXE" -ArgumentList $args -NoNewWindow -Wait -PassThru
           if ($pluginvalProcess.ExitCode -ne 0) { throw "pluginval failed with exit code $($pluginvalProcess.ExitCode)" }
