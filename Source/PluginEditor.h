@@ -13,9 +13,12 @@ public:
     void resized() override;
 
 private:
+    class StudioKnobLookAndFeel;
     void setupSlider (juce::Slider& slider, juce::Label& label, const juce::String& text);
+    void drawPianoBackdrop (juce::Graphics& g);
 
     CodexPianoVST3AudioProcessor& audioProcessor;
+    std::unique_ptr<StudioKnobLookAndFeel> knobLookAndFeel;
 
     juce::Slider gainSlider;
     juce::Slider brightnessSlider;
