@@ -45,8 +45,12 @@ cmake --build build --config Release
 - What it does:
   - Builds `CodexPianoVST3_VST3` and `CodexPianoVST3_Standalone` on `windows-latest`
   - Packages `build/packages/CodexPianoVST3-windows.zip`
+  - Unzips and verifies expected packaged binaries are present
+  - Runs `pluginval` headless validation against the packaged `.vst3`
+  - Smoke-launches the packaged standalone `.exe`
+  - Generates `build/packages/CodexPianoVST3-windows.zip.sha256`
   - Uploads the zip as a workflow artifact
-  - Creates a GitHub Release and attaches the zip when the ref is a `v*` tag
+  - Creates a GitHub Release and attaches the zip + checksum when the ref is a `v*` tag
 
 ## Next Upgrade
 For realistic piano tone, replace the current voice synthesis with layered sampled notes via `juce::SamplerSound`.

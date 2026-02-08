@@ -30,11 +30,80 @@ jobs:
         shell: pwsh
         run: powershell -ExecutionPolicy Bypass -File scripts/package_windows_zip.ps1 build
 
+      - name: Validate package contents
+        shell: pwsh
+        run: |
+          $zip = "build/packages/CodexPianoVST3-windows.zip"
+          if (!(Test-Path $zip)) { throw "Missing package: $zip" }
+
+          $extractDir = "build/ci-unpacked"
+          if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+          Expand-Archive -Path $zip -DestinationPath $extractDir -Force
+
+          $vst3 = Get-ChildItem $extractDir -Recurse -Filter "*.vst3" | Select-Object -First 1
+          if (-not $vst3) { throw "No .vst3 found in packaged artifact" }
+
+          $standaloneExe = Get-ChildItem $extractDir -Recurse -Filter "*.exe" | Where-Object { $_.Name -notlike "pluginval*" } | Select-Object -First 1
+          if (-not $standaloneExe) { throw "No standalone .exe found in packaged artifact" }
+
+          "PACKAGED_VST3=$($vst3.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PACKAGED_STANDALONE_EXE=$($standaloneExe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install pluginval
+        shell: pwsh
+        run: |
+          $pluginvalVersion = "v1.0.4"
+          $pluginvalZip = "pluginval_Windows.zip"
+          $url = "https://github.com/Tracktion/pluginval/releases/download/$pluginvalVersion/$pluginvalZip"
+
+          New-Item -ItemType Directory -Force -Path "build/tools" | Out-Null
+          Invoke-WebRequest -Uri $url -OutFile "build/tools/$pluginvalZip"
+          Expand-Archive -Path "build/tools/$pluginvalZip" -DestinationPath "build/tools/pluginval" -Force
+
+          $pluginvalExe = Get-ChildItem "build/tools/pluginval" -Recurse -Filter "pluginval.exe" | Select-Object -First 1
+          if (-not $pluginvalExe) { throw "pluginval.exe not found after extraction" }
+
+          "PLUGINVAL_EXE=$($pluginvalExe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Validate VST3 with pluginval
+        shell: pwsh
+        run: |
+          if (!(Test-Path $env:PLUGINVAL_EXE)) { throw "pluginval exe not found: $env:PLUGINVAL_EXE" }
+          if (!(Test-Path $env:PACKAGED_VST3)) { throw "Packaged VST3 not found: $env:PACKAGED_VST3" }
+
+          & "$env:PLUGINVAL_EXE" --validate-in-process --strictness-level 5 --repeat 1 --skip-gui-tests --output-dir "build/pluginval-out" "$env:PACKAGED_VST3"
+          if ($LASTEXITCODE -ne 0) { throw "pluginval failed with exit code $LASTEXITCODE" }
+
+      - name: Smoke test Standalone launch
+        shell: pwsh
+        run: |
+          if (!(Test-Path $env:PACKAGED_STANDALONE_EXE)) { throw "Standalone EXE not found: $env:PACKAGED_STANDALONE_EXE" }
+
+          $process = Start-Process -FilePath "$env:PACKAGED_STANDALONE_EXE" -PassThru
+          Start-Sleep -Seconds 8
+
+          if ($process.HasExited) {
+            if ($process.ExitCode -ne 0) {
+              throw "Standalone exited with code $($process.ExitCode)"
+            }
+          } else {
+            Stop-Process -Id $process.Id -Force
+          }
+
+      - name: Create checksums
+        shell: pwsh
+        run: |
+          $zip = "build/packages/CodexPianoVST3-windows.zip"
+          $checksum = Get-FileHash $zip -Algorithm SHA256
+          "$($checksum.Hash) *$(Split-Path $zip -Leaf)" | Out-File -FilePath "build/packages/CodexPianoVST3-windows.zip.sha256" -Encoding ascii
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: CodexPianoVST3-Windows
-          path: build/packages/CodexPianoVST3-windows.zip
+          path: |
+            build/packages/CodexPianoVST3-windows.zip
+            build/packages/CodexPianoVST3-windows.zip.sha256
           if-no-files-found: error
 
   release:
